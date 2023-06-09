@@ -1,0 +1,51 @@
+syntax = "proto3";
+package base;
+option go_package = "proto/base";
+import "google/protobuf/empty.proto";
+
+enum Role {
+  MAFIA = 0;
+  MEDIC = 1;
+  CITIZEN = 2;
+}
+
+message Event {
+  string text = 1;
+  bool needs_answer = 2;
+
+  uint64 user_id = 3;
+  uint64 selected_target_id = 4;
+  uint64 room_id = 5;
+}
+
+message Response {
+  string text = 1;
+  uint64 selected_target_id = 2;
+  uint64 room_id = 3;
+}
+
+message Game {
+  repeated Player players = 2;
+  repeated uint64 selected_target_ids = 3;
+  uint64 id = 4;
+}
+
+message Player {
+  string name = 1;
+  Role role = 2;
+  bool alive = 3;
+}
+
+message Room {
+  uint64 room_id = 1;
+  uint64 max_players = 2;
+  repeated Player players = 3;
+  Game game = 4;
+}
+
+message Players { repeated Player players = 1; }
+service MafiaService {
+  rpc GetPlayersList(Room) returns (Players);
+  rpc Join(Player) returns (stream Event);
+  rpc ResponseEvent(Event) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,26 @@
+version: "3"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: cmd/server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      MAX_PLAYERS: "4"
+  bot:
+    build:
+      context: .
+      dockerfile: cmd/client/Dockerfile
+    environment:
+      ROLE: "bot"
+      USER: "bot" # к каждому боту в конец добавляется рандомный int чтобы не путаться когда голосуешь
+    depends_on: [ server ]
+  player:
+    build:
+      context: .
+      dockerfile: cmd/client/Dockerfile
+    environment:
+      ROLE: "player"
+      USER: "Hattonuri"

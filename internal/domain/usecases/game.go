@@ -3,9 +3,11 @@ package usecases
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/hattonuri/soa-hmw-2/internal/generated/proto/base"
+	"github.com/streadway/amqp"
 )
 
 type Game struct {
@@ -60,8 +62,90 @@ func (g *Game) GetMaxVotedIndex() int {
 	return result
 }
 
+func (g *Game) RunChat() {
+	amqpConn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	if err != nil {
+		log.Fatalf("amqp dial: %v", err)
+		return
+	}
+	amqpChannel, err := amqpConn.Channel()
+	if err != nil {
+		log.Fatalf("amqp channel: %v", err)
+		return
+	}
+	defer amqpChannel.Close()
+	q, err := amqpChannel.QueueDeclare(
+		fmt.Sprintf("room-%d", g.room.RoomId),
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	if err != nil {
+		log.Fatalf("amqp queue declare: %v", err)
+		return
+	}
+
+	log.Println("Listening to ", q.Name)
+	messages, err := amqpChannel.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+	)
+	if err != nil {
+		log.Fatalf("amqp channel consume: %v", err)
+		return
+	}
+	for chatMessage := range messages {
+		msg := string(chatMessage.Body)
+		if strings.Contains(msg, "-ALLCHAT-") {
+			tokens := strings.Split(msg, "-ALLCHAT-")
+			amqpSender := tokens[0]
+			text := tokens[1]
+			g.NotifyPlayerGroup(
+				&base.Event{
+					Text: amqpSender + ":" + text,
+				},
+				func(i int) bool {
+					player := g.game.Players[i]
+					if player.Alive && player.Name != amqpSender {
+						fmt.Println("ROFLAN ", player.Name)
+					}
+					return player.Alive && player.Name != amqpSender
+				},
+				false,
+			)
+		} else if strings.Contains(msg, "-MAFIACHAT-") {
+			tokens := strings.Split(msg, "-MAFIACHAT-")
+			amqpSender := tokens[0]
+			text := tokens[1]
+			g.NotifyPlayerGroup(
+				&base.Event{
+					Text: amqpSender + ":" + text,
+				},
+				func(i int) bool {
+					player := g.game.Players[i]
+					if player.Alive && player.Name != amqpSender && player.Role == base.Role_MAFIA {
+						fmt.Println("ZZZ ", player.Name)
+					}
+					return player.Alive && player.Name != amqpSender && player.Role == base.Role_MAFIA
+				},
+				false,
+			)
+		}
+	}
+}
+
 func (g *Game) Run() {
 	defer close(g.room.done)
+
+	go g.RunChat()
 	for {
 		cntMafia := 0
 		cntNotMafia := 0

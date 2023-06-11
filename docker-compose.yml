@@ -1,10 +1,23 @@
 version: "3"
 
 services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5672" ]
+      interval: 5s
+      timeout: 30s
+      retries: 228
+
   server:
     build:
       context: .
       dockerfile: cmd/server/Dockerfile
+    depends_on:
+      - rabbitmq
     ports:
       - "8080:8080"
     environment:
@@ -16,7 +29,9 @@ services:
     environment:
       ROLE: "bot"
       USER: "bot" # к каждому боту в конец добавляется рандомный int чтобы не путаться когда голосуешь
-    depends_on: [ server ]
+    depends_on:
+      - server
+      - rabbitmq
   player:
     build:
       context: .
@@ -24,3 +39,5 @@ services:
     environment:
       ROLE: "player"
       USER: "Hattonuri"
+    depends_on:
+      - rabbitmq
